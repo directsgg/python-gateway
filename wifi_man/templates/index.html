@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrador de Gateway</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
+     integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous">
+     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"> -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap-icons/font/bootstrap-icons.min.css') }}">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container mt-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Configuración inalambrica</h5>
+                <div class="row mb-3 align-items-center">
+                    <div class="col-sm-3"><strong>Estado de la conexión:</strong></div>
+                    <div class="col-sm-9 mt-3 d-flex align-items-center" id="connection-status-display">
+                        <span class="text-muted">Verificando...</span>
+                        <button id="disconnect-button" class="btn btn-outline-secondary btn-sm ms-2 d-none">
+                            <i class="bi bi-x-circle"></i> Desconectar
+                        </button>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6>Seleccione una red Wi-Fi</h6>
+                    <button id="rescan-button" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-clockwise"></i> Refrescar
+                    </button>
+                </div>
+
+                <div class="table-responsive mt-3">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Nombre Wi-Fi (SSID)</th>
+                                <th>BSSID</th>
+                                <th>Canal</th>
+                                <th>Seguridad</th>
+                                <th>Señal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="wifi-table-body">
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Escaneando redes...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-4">
+                    <form id="connect-form" method="post" class="row g-3">
+                        <div class="col-auto">
+                            <label for="ssid" class="visually-hidden">SSID</label>
+                            <input id="ssid-input" class="form-control" type="text" name="ssid"
+                                placeholder="Nombre de la red (SSID)" required>
+                        </div>
+                        <div class="col-auto">
+                            <label for="password" class="visually-hidden">Contraseña</label>
+                            <input class="form-control" type="password" name="password" placeholder="Contraseña">
+                        </div>
+                        <div class="col-auto">
+                            <button id="connect-button" type="submit" class="btn btn-primary">Conectar</button>
+                        </div>
+                    </form>
+
+                    <div id="connect-message" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const tableBody = document.getElementById('wifi-table-body');
+            const rescanButton = document.getElementById('rescan-button');
+            const statusDisplay = document.getElementById('connection-status-display');
+            const disconnectButton = document.getElementById('disconnect-button');
+            const connectForm = document.getElementById('connect-form');
+            const connectButton = document.getElementById('connect-button');
+            const connectMessage = document.getElementById('connect-message');
+            const ssidInput = document.getElementById('ssid-input');
+
+            connectForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+
+                connectButton.disabled = true;
+                connectButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Conectando...';
+                connectMessage.innerHTML = '';
+
+                const formData = new FormData(connectForm);
+
+                fetch('/connect', {
+                    method: 'POST',
+                    body: formData,
+                })
+                    .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+                    .then(({ ok, status, data }) => {
+                        if (ok) {
+                            connectMessage.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                            setTimeout(() => {
+                                updateConnectionStatus();
+                                scanAndRefresh();
+                            }, 3000);
+                        } else {
+                            connectMessage.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                        }
+                    })
+                    .catch(error => {
+                        connectMessage.innerHTML = `<div class="alert alert-danger">Error de red. No se pudo completar la solicitud.</div>`;
+                    })
+                    .finally(() => {
+                        connectButton.disabled = false;
+                        connectButton.innerHTML = 'Conectar';
+                    });
+
+            })
+            function renderTable(networks) {
+                tableBody.innerHTML = '';
+                if (networks.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center">No se encontraron redes.</td></tr>';
+                    return;
+                }
+
+                networks.forEach(net => {
+                    const ssidLink = `<a href="#" class="ssid-link" data-ssid="${net.ssid}">${net.ssid}</a>`;
+                    const row = `
+                    <tr>
+                        <td>${ssidLink}</td>
+                        <td>${net.mac}</td>
+                        <td>${net.channel}</td>
+                        <td>${net.security}</td>
+                        <td><i class="bi bi-wifi"></i> ${net.signal}%</td>
+                    </tr>
+                `;
+                    tableBody.innerHTML += row;
+                });
+            }
+
+            tableBody.addEventListener('click', function (event) {
+                if (event.target.classList.contains('ssid-link')) {
+                    event.preventDefault();
+
+                    const ssidToFill = event.target.dataset.ssid;
+
+                    ssidInput.value = ssidToFill;
+
+                    const passwordInput = document.querySelector('input[name="password"]');
+                    if (passwordInput) {
+                        passwordInput.focus();
+                    }
+                }
+            });
+
+            async function scanAndRefresh() {
+                rescanButton.disabled = true;
+                rescanButton.innerHTML = `
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Escaneando...
+            `;
+
+                try {
+                    const response = await fetch('/rescan_wifi');
+                    const networks = await response.json();
+                    renderTable(networks);
+                } catch (error) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error al cargar las redes.</td></tr>';
+                } finally {
+                    rescanButton.disabled = false;
+                    rescanButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refrescar';
+                }
+            }
+
+            function updateConnectionStatus() {
+                fetch('/connection_status')
+                    .then(response => response.json())
+                    .then(data => {
+                        let statusHtml = '';
+
+                        if (data.status === 'online' || data.status === 'local') {
+                            disconnectButton.classList.remove('d-none');
+                        } else {
+                            disconnectButton.classList.add('d-none');
+                        }
+                        switch (data.status) {
+                            case 'online':
+                                statusHtml = `<span class="fw-bold text-success">${data.message}</span> a través de <strong>${data.ssid}</strong>`;
+                                break;
+                            case 'local':
+                                statusHtml = `<span class="fw-bold text-warning">${data.message}</span> en <strong>${data.ssid}</strong>`;
+                                break;
+                            case 'offline':
+                                statusHtml = `<span class="fw-bold text-danger">${data.message}</span>. Seleccione una red para conectarse.`;
+                                break;
+                            default:
+                                statusHtml = `<span class="text-muted">Estado desconocido.</span>`;
+                        }
+                        statusDisplay.firstElementChild.innerHTML = statusHtml;
+                    })
+                    .catch(error => {
+                        statusDisplay.innerHTML = '<span class="fw-bold text-danger">No se pudo verificar el estado de la conexión.</span>';
+                        disconnectButton.classList.add('d-none');
+                    });
+            }
+
+            disconnectButton.addEventListener('click', function () {
+                disconnectButton.disabled = true;
+                disconnectButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Desconectando...';
+
+                fetch('/disconnect', {
+                    method: 'POST',
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            updateConnectionStatus();
+                            scanAndRefresh();
+                        } else {
+                            alert('Error al desconectar: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        alert('Ocurrió un error de red al intentar desconectar.');
+                    })
+                    .finally(() => {
+                        disconnectButton.disabled = false;
+                        disconnectButton.innerHTML = '<i class="bi bi-x-circle"></i> Desconectar';
+                    });
+            });
+
+            rescanButton.addEventListener('click', scanAndRefresh);
+
+            scanAndRefresh();
+            updateConnectionStatus();
+
+            setInterval(updateConnectionStatus, 5000);
+        });
+    </script>
+</body>
+
+</html>

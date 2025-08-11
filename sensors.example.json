@@ -1,0 +1,7 @@
+[
+    ["11:22:33:AA:BB:CC", "Name of sensor 1"],
+    ["11:22:33:AA:BB:CC", "Name of sensor 2"],
+    ["AA:BB:CC:11:22:33", "Name of sensor 3"],
+    ["AA:BB:CC:11:22:33", "Name of sensor 4"],
+    ["11:22:33:AA:BB:CC", "Name of sensor 5"]
+]

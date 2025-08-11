@@ -1,0 +1,4 @@
+bleak
+supabase
+python-dotenv
+flask
