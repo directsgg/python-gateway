@@ -190,8 +190,8 @@ class SensorMonitorApp:
 
 
 async def main():
-    # wifi = WiFiManager(host="192.168.4.1", port=8080)
-    wifi = WiFiManager(host="0.0.0.0", port=8080)
+    wifi = WiFiManager(host="192.168.4.1", port=8080)
+    # wifi = WiFiManager(host="0.0.0.0", port=8080)
 
     with open("sensors.json", "r") as f:
         SENSORS = json.load(f)
