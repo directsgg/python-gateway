@@ -107,9 +107,14 @@ class SensorManager:
                 break
 
     async def disconnect_all(self):
-        for client in self.clients:
-            await self._disconnect_sensor(client)
-        self.clients = []
+        entries = list(self.clients)
+
+        await asyncio.gather(
+            *(self._disconnect_sensor(client, address, name) for client, address, name in entries),
+            return_exceptions=True,
+        )
+
+        self.clients.clear()
 
     async def read_all_sensors(self, disconnect_sensors_on_finish = False):
         results = []
@@ -152,11 +157,33 @@ class SensorManager:
         logger.error(f"{name} fallaron los intentos de conexion")
         return None
     
-    async def _disconnect_sensor(self, client):
-        if client and client.is_connected:
-            await client.disconnect()
+    async def _disconnect_sensor(self, client, address=None, name=None):
+        if not client:
+            return False
+
+        tag = f"{name or ''} ({address or ''})".strip()
+        try:
+            if getattr(client, "is_connected", False):
+                # Evita quedarte colgado si el bus ya murió
+                await asyncio.wait_for(client.disconnect(), timeout=5)
+            logger.info(f"Desconectado OK: {tag}")
             return True
-        return False
+        except Exception as e:
+            # Muy común: EOFError de dbus-fast cuando BlueZ cerró el socket antes de la respuesta
+            logger.warning(f"[{tag}] Falló Bleak disconnect(): {e} — intento fallback bluetoothctl")
+            try:
+                if address:
+                    subprocess.run(
+                        ["bluetoothctl"],
+                        input=f"disconnect {address}\n",
+                        text=True,
+                        timeout=5
+                    )
+                    logger.info(f"[{tag}] Fallback bluetoothctl desconectó")
+                    return True
+            except Exception as e2:
+                logger.error(f"[{tag}] Fallback bluetoothctl también falló: {e2}")
+            return False
     
     async def _read_sensor_data(self, client, name):
         trigger = bytes([0x01, 0x00, 0x00, 0x00])
@@ -183,7 +210,7 @@ class SensorManager:
             # "battery_temp": batt_temp,
         }
 
-        if last_percent is None or abs(percent - last_percent >= 10):
+        if last_percent is None or abs(percent - last_percent) >= 10:
             data["battery_percent"] = percent
             self.last_reported_battery[device_id] = percent
 

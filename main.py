@@ -1,5 +1,6 @@
 import asyncio
 import json
+from logging.handlers import RotatingFileHandler
 import time
 from datetime import datetime, timezone, timedelta
 from ble_man.manager import SensorManager
@@ -9,11 +10,18 @@ import os
 from dotenv import load_dotenv
 import logging
 
+# LOG_DIR = "/var/log/gateway_app"
+# LOG_FILE = os.path.join(LOG_DIR, "main.log")
+
+# # Crear carpeta de logs si no existe
+# os.makedirs(LOG_DIR, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,  # disponible DEBUG, INFO, WARNING, ERROR, CRITICAL
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.StreamHandler()
+        logging.StreamHandler(),
+        # RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=5)  # rota a 5MB, mantiene 5 copias
     ]
 )
 logger = logging.getLogger(__name__)
@@ -54,6 +62,8 @@ class SensorMonitorApp:
             gateway_id=os.environ["GATEWAY_ID"]
         )
         uploader.config_callback = self.on_config_update
+
+        await asyncio.sleep(10)
 
         gateway_config = await uploader.fetch_gateway_config()
         self.on_config_update(gateway_config)

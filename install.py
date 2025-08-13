@@ -6,6 +6,7 @@ import sys
 SERVICE_NAME = "gatewayapp.service"
 APP_DIRECTORY = "./"
 ETC_APP_DIRECTORY = "/etc/gateway_app"
+LOG_DIR = "/var/log/gateway_app"
 REQUIREMENTS_FILE = "requeriments.txt"
 PYTHON_ENTRY = "main.py"
 
@@ -44,6 +45,16 @@ def install_requeriments():
             exit(1)
     else:
         print(f"Requirements file '{REQUIREMENTS_FILE}' not found.")
+        exit(1)
+
+def create_log_directory():
+    """Create log directory for the application"""
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        os.chmod(LOG_DIR, 0o755)
+        print(f"Log directory created at {LOG_DIR}")
+    except Exception as e:
+        print(f"Failed to create log directory {LOG_DIR}: {e}")
         exit(1)
 
 def setup_autorun():
@@ -121,6 +132,7 @@ def setup():
         check_root()
         setup_virtualenv()
         install_requeriments()
+        create_log_directory()
         setup_autorun()
         setup_static_ip()
         print("Setup completed successfully!")

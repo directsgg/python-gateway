@@ -2,7 +2,7 @@ import os
 import shutil
 import subprocess
 
-from install import SERVICE_NAME, ETC_APP_DIRECTORY
+from install import SERVICE_NAME, ETC_APP_DIRECTORY, LOG_DIR
 
 def check_root():
     if os.geteuid() != 0:
@@ -30,6 +30,14 @@ def remove_application_folder():
         print(f"Removed application directory: {ETC_APP_DIRECTORY}")
     else:
         print(f"Application directory not found: {ETC_APP_DIRECTORY}")
+
+def remove_logs_folder():
+    """Remove the logs folder if it exists."""
+    if os.path.exists(LOG_DIR):
+        shutil.rmtree(LOG_DIR)
+        print(f"Removed logs directory: {LOG_DIR}")
+    else:
+        print(f"Logs directory not found: {LOG_DIR}")
 
 def remove_static_ip(interface="eth0"):
     """Remove the static IP configuration from the given interface"""
@@ -67,6 +75,7 @@ def uninstall():
         check_root()
         stop_and_disable_service()
         remove_application_folder()
+        remove_logs_folder()
         remove_static_ip()
         reload_systemd()
         print("Uninstall completed successfully!")
