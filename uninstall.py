@@ -31,20 +31,35 @@ def remove_application_folder():
     else:
         print(f"Application directory not found: {ETC_APP_DIRECTORY}")
 
-# def remove_hotspot():
-#     """Remove the created Wi-Fi hotspot."""
-#     subprocess.run(['nmcli', 'connection', 'delete', DEFAULT_HOTSPOT_NAME], capture_output=True, text=True)
+def remove_static_ip(interface="eth0"):
+    """Remove the static IP configuration from the given interface"""
+
+    connection_name = "gateway_static"
+
+    try:
+
+        subprocess.run(
+            ["nmcli", "con", "delete", connection_name],
+            capture_output=True, text=True
+        )
+
+        subprocess.run([
+            "nmcli", "con", "modify",
+            interface,
+            "ipv4.method", "auto"
+        ], capture_output=True, text=True)
+
+        subprocess.run(["nmcli", "con", "up", interface], capture_output=True, text=True)
+        print(f"Static IP removed from {interface}. DHCP restored.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to remove static IP: {e.stderr or e}")
+        exit(1)
+
 def reload_systemd():
     """Reload systemd configuration"""
     subprocess.run(["systemctl", "daemon-reload"], capture_output=True, text=True)
     subprocess.run(["systemctl", "reset-failed"], capture_output=True, text=True)
     print("Systemd daemon reloaded.")
-
-# def uninstall():
-#     remove_service_file()
-#     remove_application_folder()
-#     # remove_hotspot()
-#     print("Uninstallation completed successfully!")
 
 def uninstall():
     """Main uninstall function."""
@@ -52,6 +67,7 @@ def uninstall():
         check_root()
         stop_and_disable_service()
         remove_application_folder()
+        remove_static_ip()
         reload_systemd()
         print("Uninstall completed successfully!")
     except Exception as e:

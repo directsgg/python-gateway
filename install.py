@@ -87,12 +87,42 @@ def setup_autorun():
 
     print(f"Setup service \"{SERVICE_NAME}\" completed successfully!")
 
+def setup_static_ip(interface="eth0", ip_address="192.168.4.1/24"):
+    """Configure static IP for a given interface """
+
+    connection_name = "gateway_static"
+
+    try:
+        subprocess.run(
+            ["nmcli", "con", "delete", connection_name],
+            capture_output=True, text=True
+        )
+
+        subprocess.run(
+            ["nmcli", "con", "add",
+             "type", "ethernet",
+             "ifname", interface,
+             "con-name", connection_name,
+             "ipv4.method", "manual",
+             "ipv4.addresses", ip_address,
+             "ipv4.gateway", "",
+             "ipv4.dns", "8.8.8.8,1.1.1.1"
+             ], check=True)
+        
+        subprocess.run(["nmcli", "con", "up", connection_name], check=True)
+        print(f"Static IP {ip_address} set for {interface} using nmcli")
+        
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to configure static IP: {e.stderr or e}")
+        exit(1)
+
 def setup():
     try:
         check_root()
         setup_virtualenv()
         install_requeriments()
         setup_autorun()
+        setup_static_ip()
         print("Setup completed successfully!")
     
     except Exception as e:
