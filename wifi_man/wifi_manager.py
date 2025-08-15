@@ -186,6 +186,10 @@ class WiFiManager:
             return False
         
     async def start_web_server(self):
+
+        logWeb = logging.getLogger("werkzeug")
+        logWeb.setLevel(logging.WARNING)
+        
         def run_flask():
             self.app.run(debug=False, host=self.host, port=self.port)
 

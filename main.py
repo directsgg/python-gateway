@@ -1,6 +1,7 @@
 import asyncio
 import json
 from logging.handlers import RotatingFileHandler
+import signal
 import time
 from datetime import datetime, timezone, timedelta
 from ble_man.manager import SensorManager
@@ -10,18 +11,18 @@ import os
 from dotenv import load_dotenv
 import logging
 
-# LOG_DIR = "/var/log/gateway_app"
-# LOG_FILE = os.path.join(LOG_DIR, "main.log")
+LOG_DIR = "/var/log/gateway_app"
+LOG_FILE = os.path.join(LOG_DIR, "main.log")
 
-# # Crear carpeta de logs si no existe
-# os.makedirs(LOG_DIR, exist_ok=True)
+# Crear carpeta de logs si no existe
+os.makedirs(LOG_DIR, exist_ok=True)
 
 logging.basicConfig(
-    level=logging.INFO,  # disponible DEBUG, INFO, WARNING, ERROR, CRITICAL
+    level=logging.WARNING,  # disponible DEBUG, INFO, WARNING, ERROR, CRITICAL
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler(),
-        # RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=5)  # rota a 5MB, mantiene 5 copias
+        RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=5)  # rota a 5MB, mantiene 5 copias
     ]
 )
 logger = logging.getLogger(__name__)
@@ -208,6 +209,11 @@ async def main():
     logger.info(f"Sensores cargados: {SENSORS}")
 
     monitor = SensorMonitorApp(SENSORS)
+    
+    def handle_sigusr1():
+        logger.warning(f"Sampling interval: {monitor.sampling_interval}")
+
+    signal.signal(signal.SIGUSR1, lambda *args: handle_sigusr1())
 
     await asyncio.gather(
         wifi.start_web_server(),
