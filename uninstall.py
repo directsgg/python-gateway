@@ -1,3 +1,4 @@
+import argparse
 import os 
 import shutil
 import subprocess
@@ -69,14 +70,17 @@ def reload_systemd():
     subprocess.run(["systemctl", "reset-failed"], capture_output=True, text=True)
     print("Systemd daemon reloaded.")
 
-def uninstall():
+def uninstall(skip_static_ip=False):
     """Main uninstall function."""
     try:
         check_root()
         stop_and_disable_service()
         remove_application_folder()
         remove_logs_folder()
-        remove_static_ip()
+        if not skip_static_ip:
+            remove_static_ip()
+        else:
+            print("Skipping static IP removal")
         reload_systemd()
         print("Uninstall completed successfully!")
     except Exception as e:
@@ -84,4 +88,11 @@ def uninstall():
         exit(1)
 
 if __name__ == '__main__':
-    uninstall()
+    parser = argparse.ArgumentParser(description="Uninstall the gateway service.")
+    parser.add_argument(
+        "--skip-static-ip",
+        action="store_true",
+        help="Skip removing static IP configuration."
+    )
+    args = parser.parse_args()
+    uninstall(skip_static_ip=args.skip_static_ip)

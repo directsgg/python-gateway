@@ -8,33 +8,38 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def battery_mv_to_percent(mv: int) -> int:
-    if mv >= 3000:
-        return 100
-    elif mv >= 2950:
-        return 95
-    elif mv >= 2900:
-        return 90
-    elif mv >= 2850:
-        return 80
-    elif mv >= 2800:
-        return 70
-    elif mv >= 2750:
-        return 60
-    elif mv >= 2700:
-        return 50
-    elif mv >= 2650:
-        return 40
-    elif mv >= 2600:
-        return 30
-    elif mv >= 2550:
-        return 20
-    elif mv >= 2500:
-        return 10
-    elif mv >= 2400:
-        return 5
+def battery_mv_to_percent(mv: int, temp_c: int) -> int:
+    """
+    Convierte mV -> % para CR2477 considerando el efecto de temperatura.
+    Modelo: rango [V_min, V_max(temp)] + compresión no lineal para simular el 'plateau'.
+    """
+    # ---- Parámetros (ajustables) ----
+    V_min = 2400            # tensión crítica: 0 %
+    Vmax_20C = 2960         # celda llena a ~20 °C
+    Vmax_n25C = 2650        # celda llena a ~-25 °C
+    alpha = 0.60            # 0.55–0.70 da buenas curvas (más bajo = más % arriba)
+    headroom_full = 6       # si mv está a <6 mV de Vmax(temp), muestra 100 %
+     # ---- V_max dependiente de temperatura (interpolación lineal) ----
+    if temp_c >= 20:
+        V_max = Vmax_20C
+    elif temp_c <= -25:
+        V_max = Vmax_n25C
     else:
+        # interpola entre -25 °C y 20 °C
+        V_max = Vmax_n25C + (Vmax_20C - Vmax_n25C) * ((temp_c + 25) / 45.0)
+
+    # ---- Acotaciones rápidas ----
+    if mv <= V_min:
         return 0
+    if mv >= V_max - headroom_full:
+        return 100
+    
+    # ---- SOC no lineal (plateau) ----
+    soc = (mv - V_min) / float(V_max - V_min)  # 0..1 relativo a la temperatura
+    percent = 100.0 * (soc ** alpha)
+
+    # Redondeo y límites
+    return max(0, min(100, int(round(percent))))
         
 class SensorManager:
     CHAR_TEMP = "EF090080-11D6-42BA-93B8-9DD7EC090AA9"
@@ -169,7 +174,7 @@ class SensorManager:
             logger.info(f"Desconectado OK: {tag}")
             return True
         except Exception as e:
-            # Muy común: EOFError de dbus-fast cuando BlueZ cerró el socket antes de la respuesta
+            # EOFError de dbus-fast cuando BlueZ cerró el socket antes de la respuesta
             logger.warning(f"[{tag}] Falló Bleak disconnect(): {e} — intento fallback bluetoothctl")
             try:
                 if address:
@@ -200,17 +205,17 @@ class SensorManager:
 
         device_id = client.address
 
-        percent = battery_mv_to_percent(batt_mv)
+        percent = battery_mv_to_percent(batt_mv, int(batt_temp))
         last_percent = self.last_reported_battery.get(device_id)
         
         data =  {
             "temperature": temp,
-            # "humidity": humid,
+            "humidity": humid,
             "battery_mv": batt_mv,
-            # "battery_temp": batt_temp,
+            "battery_temp": batt_temp,
         }
 
-        if last_percent is None or abs(percent - last_percent) >= 10:
+        if last_percent is None or abs(percent - last_percent) >= 5:
             data["battery_percent"] = percent
             self.last_reported_battery[device_id] = percent
 

@@ -18,7 +18,7 @@ LOG_FILE = os.path.join(LOG_DIR, "main.log")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 logging.basicConfig(
-    level=logging.INFO,  # disponible DEBUG, INFO, WARNING, ERROR, CRITICAL
+    level=logging.WARNING,  # disponible DEBUG, INFO, WARNING, ERROR, CRITICAL
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler(),
@@ -64,9 +64,16 @@ class SensorMonitorApp:
         )
         uploader.config_callback = self.on_config_update
 
-        await asyncio.sleep(10)
+        await asyncio.sleep(20)
 
-        gateway_config = await uploader.fetch_gateway_config()
+        while True:
+            gateway_config = await uploader.fetch_gateway_config()
+            if not gateway_config:
+                logger.warning("No se recibio configuración reintentando en 2 min")
+                await asyncio.sleep(120)
+            else:
+                break
+
         self.on_config_update(gateway_config)
         await uploader.listen_gateway_config_changes()
 
@@ -74,7 +81,7 @@ class SensorMonitorApp:
 
         while True:
             startG = time.perf_counter()
-            data = await self.sensor_manager.read_all_sensors(self.sampling_interval > 600) # desconectar los sensores si sobrepasa los 10 min en muestras
+            data = await self.sensor_manager.read_all_sensors(self.sampling_interval >= 300) # desconectar los sensores si sobrepasa los 5 min en muestras
             logger.info(f"\n resultados finales:")
             payload_telemetry = []
             
@@ -92,6 +99,7 @@ class SensorMonitorApp:
             now = datetime.now(timezone.utc) 
             alerts_to_send: list[dict] = [] 
             for d in data:
+                logger.info(data)
                 mac = d["mac"]
                 temp = d["temperature"]
                 payload_telemetry.append({
@@ -124,6 +132,8 @@ class SensorMonitorApp:
                             del self.over_threshold_start[mac]
                         if mac in self.active_alert_macs:
                             self.active_alert_macs.remove(mac)
+                        if mac in self.last_alert_sent:
+                            del self.last_alert_sent[mac]
 
                 if d.get("battery_percent") is not None:
                     await uploader.update_batt_device(d["mac"], d["battery_percent"])
@@ -173,7 +183,7 @@ class SensorMonitorApp:
                     first_deadline = start_time + self.min_duration_after_start
                     if first_deadline > now:
                         next_sample_time = min(next_sample_time, first_deadline)
-                
+
                 if (mac in self.active_alert_macs) and last_sent:
                     resend_deadline = last_sent + self.resend_alarm_interval
                     if resend_deadline > now:
@@ -184,45 +194,6 @@ class SensorMonitorApp:
                 f"🕒 Próxima muestra en {delay_between_samples:.2f}s "
                 f"(base {base_delay:.2f}s, next={next_sample_time.isoformat()})"
             )
-
-            # delay_between_samples = round(self.sampling_interval - elapsedG, 2)
-            # delay_between_samples = max(delay_between_samples, 0.2)
-
-            # next_sample_time = now + timedelta(seconds=delay_between_samples)
-
-            # has_critical_monitoring = False
-            # adjusted_for_deadline = False
-
-            # for mac in active_macs:
-            #     start_time_1 = self.over_threshold_start.get(mac)
-            #     last_sent_1 = self.last_alert_sent.get(mac)
-
-            #     if start_time_1:
-            #         deadline = start_time_1 + self.min_duration_after_start
-                    
-            #         if not last_sent_1 and now < deadline <= next_sample_time:
-            #             delay_until_deadline = (deadline - now).total_seconds()
-            #             delay_between_samples = max(delay_until_deadline - 1, 0.2)
-            #             logger.info(f"⏱ Ajuste de muestreo para alcanzar deadline de alerta ({delay_until_deadline:.2f}s)")
-            #             adjusted_for_deadline = True
-            #             break
-
-            #         if last_sent_1:
-            #             time_since_alert = now - last_sent_1
-            #             if time_since_alert < self.resend_alarm_interval:
-            #                 resend_deadline = last_sent_1 + self.resend_alarm_interval
-            #                 if now < resend_deadline <= next_sample_time:
-            #                     delay_until_resend = (resend_deadline - now).total_seconds()
-            #                     delay_between_samples = max(delay_until_resend - 1, 0.2)
-            #                     logger.info(f"Ajuste de muestreo para reenvio ({delay_until_resend:.2f}s)")
-            #                 else:
-            #                     logger.info(f"proxima muestra en {delay_between_samples:.2f}s cumple reenvío sin ajuste")
-        
-            #                 has_critical_monitoring = True
-            #                 break
-            
-            # if not adjusted_for_deadline and not has_critical_monitoring:
-            #     logger.info(f"🕒 Esperando {delay_between_samples}s = {self.sampling_interval} - {elapsedG:.2f}")
 
             await asyncio.sleep(delay_between_samples)
 
@@ -237,6 +208,13 @@ async def main():
     monitor = SensorMonitorApp(SENSORS)
     
     def handle_sigusr1():
+        current_level = logger.getEffectiveLevel()
+        if current_level == logging.WARNING:
+            logger.setLevel(logging.INFO)
+            logger.info("Logger cambio a nivel INFO")
+        else:
+            logger.setLevel(logging.WARNING)
+            logger.warning("Logger cambio a nivel WARNING")
         logger.warning(f"Sampling interval: {monitor.sampling_interval}")
 
     signal.signal(signal.SIGUSR1, lambda *args: handle_sigusr1())

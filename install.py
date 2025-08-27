@@ -1,3 +1,4 @@
+import argparse
 import os
 import shutil
 import subprocess
@@ -127,14 +128,17 @@ def setup_static_ip(interface="eth0", ip_address="192.168.4.1/24"):
         print(f"Failed to configure static IP: {e.stderr or e}")
         exit(1)
 
-def setup():
+def setup(skip_static_ip=False):
     try:
         check_root()
         setup_virtualenv()
         install_requeriments()
         create_log_directory()
         setup_autorun()
-        setup_static_ip()
+        if not skip_static_ip:
+            setup_static_ip()
+        else:
+            print("Skipping static IP setup.")
         print("Setup completed successfully!")
     
     except Exception as e:
@@ -142,4 +146,12 @@ def setup():
         exit(1)
 
 if __name__ == "__main__":
-    setup()
+    parser = argparse.ArgumentParser(description="Install the gateway service.")
+    parser.add_argument(
+        "--skip-static-ip",
+        action="store_true",
+        help="Skip setting up static IP configuration."
+    )
+    args = parser.parse_args()
+
+    setup(skip_static_ip=args.skip_static_ip)
