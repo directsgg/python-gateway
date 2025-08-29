@@ -46,7 +46,7 @@ class SensorManager:
     CHAR_HUMID = "EF090081-11D6-42BA-93B8-9DD7EC090AA9"
     CHAR_BATT = "EF090007-11D6-42BA-93B8-9DD7EC090AA9"
 
-    def __init__(self, sensors, max_retries=3, retry_delay=2):
+    def __init__(self, sensors, max_retries=5, retry_delay=2):
         self.sensors = sensors
         self.max_retries = max_retries
         self.retry_delay = retry_delay
