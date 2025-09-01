@@ -18,7 +18,7 @@ LOG_FILE = os.path.join(LOG_DIR, "main.log")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 logging.basicConfig(
-    level=logging.WARNING,  # disponible DEBUG, INFO, WARNING, ERROR, CRITICAL
+    level=logging.INFO,  # disponible DEBUG, INFO, WARNING, ERROR, CRITICAL
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler(),
