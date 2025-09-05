@@ -147,8 +147,9 @@ class SensorMonitorApp:
 
                 for a in alerts_to_send:
                     lines.append(
-                        f"- MAC: {a['mac']}, Temperatura: {a['temperature']} °C, durante al menos {a['duration_minutes']} minutos\n"
+                        f"- MAC: {a['mac']}, Temperatura: {a['temperature']} °C, durante al menos {a['duration_minutes']} minutos\n\n"
                     )
+                lines.append(f"\nPara mas detalles puede visitar https://neva.seimeg.com\n")
                 
                 message = "\n".join(lines)
                 uploader.send_alarm_email(self.email_recipients, "¡Alerta de temperatura!", message)
